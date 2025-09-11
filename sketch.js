@@ -1,10 +1,27 @@
-// Lysets Sti – p5.js version (drop-in til din index.html)
-// Canvas 1227 x 637 (fra din kode)
+// Lysets Sti – p5.js version med sidebar + automatisk turskift (manuelt rul)
+// Nu med navnevalg for ALLE spillere ved Start/Reset samt ved tilføjelse af nye.
 
 let W = 1227, H = 637;
+
+// Board layout
 let GRID_COLS = 10, GRID_ROWS = 4; // 10x4 = 40 felter
 let margin = 32, cellGap = 6;
 let cellW, cellH;
+
+// Fast sidebar
+const SIDEBAR_W = 320;
+
+// Auto-tur (kun skift tur; IKKE auto-rul)
+const AUTO_TURN = true;
+const TURN_DELAY = 600;   // ms pause før turen gives videre
+
+// Farvepalette (RGB), bruges til spillerfarver
+const PALETTE = [
+  [96,165,250],  // blå
+  [244,114,182], // pink
+  [52,211,153],  // grøn
+  [245,158,11]   // orange
+];
 
 const FIELD_TYPES = [
   'N','N','D','N','S','N','H','N','D','L',
@@ -15,6 +32,7 @@ const FIELD_TYPES = [
 
 const SINS = ['Stolthed','Grådighed','Vrede','Misundelse','Dovenskab','Utugt','Frådseri'];
 
+// --- Kort (forkortet sæt; udvid gerne arrays'ene) ---
 const DILEMMAS = [
   d('En ven bliver mobbet','Vil du gribe ind og hjælpe, eller se væk?',
     c('Hjælp (mist 1 tur, +2 Lys)', (G,p)=>{p.skipTurns++; p.light+=2; log(`🕊️ ${p.name} hjælper (+2 Lys, mister næste tur).`);}),
@@ -69,7 +87,7 @@ const ACTIONS = [
 
 const EVENTS = [
   {title:'Klima-katastrofe', text:'Alle mister 1 Lys. Én kan ofre 1 Lys for at redde alle.',
-   run:(G)=>{ const name = prompt(`Hvem ofrer 1 Lys? (${G.players.map(p=>p.name).join(', ')})`); 
+   run:(G)=>{ const name = prompt(`Hvem ofrer 1 Lys? (${G.players.map(p=>p.name).join(', ')})`);
      const p = G.players.find(x=>x.name.toLowerCase()===(name||'').toLowerCase());
      if(p && p.light>0){ p.light--; log(`🌍 ${p.name} ofrer 1 Lys og redder alle.`); }
      else { G.players.forEach(pl=>{ if(pl.light>0) pl.light--; }); log(`🌪️ Ingen ofrede. Alle mister 1 Lys (hvis muligt).`); } } },
@@ -85,22 +103,28 @@ const EVENTS = [
 ];
 
 // ---------- Game state ----------
-const Game = { started:false, players:[], turn:0, lastDie:null, log:[], modal:null };
+const Game = { started:false, players:[], turn:0, lastDie:null, log:[], modal:null, ended:false };
 
-function makePlayer(name, color){
-  return { name, color, pos:0, light:1, sins:[], skipTurns:0, shield:false };
+function makePlayer(name, col){
+  return { name, color: col, pos:0, light:1, sins:[], skipTurns:0, shield:false };
+}
+
+// Hjælp: farve fra palette-index
+function colorFromPalette(i){
+  const [r,g,b] = PALETTE[i % PALETTE.length];
+  return color(r,g,b);
 }
 
 // ---------- p5 setup/draw ----------
 function setup(){
-  let canvas = createCanvas(W, H);
+  const canvas = createCanvas(W, H);
   canvas.position(5,5);
-  cellW = (W - margin*2 - cellGap*(GRID_COLS-1)) / GRID_COLS;
+
+  // cellW tager højde for sidebar-bredden
+  cellW = (W - SIDEBAR_W - margin*2 - cellGap*(GRID_COLS-1)) / GRID_COLS;
   cellH = (H - margin*2 - 150 - cellGap*(GRID_ROWS-1)) / GRID_ROWS; // 150px til top-UI
 
-  // læg to standardspillere
-  Game.players.push(makePlayer('Spiller 1', color(96,165,250)));
-  Game.players.push(makePlayer('Spiller 2', color(244,114,182)));
+  initPlayers(); // <-- vælg antal og navne ved start
 }
 
 function draw(){
@@ -112,53 +136,58 @@ function draw(){
   if(Game.modal) drawModal(Game.modal);
 }
 
+// ---------- Init spillere (navne & antal) ----------
+function initPlayers(){
+  Game.players = [];
+  Game.started = false; Game.turn = 0; Game.lastDie = null; Game.log = []; Game.modal = null; Game.ended = false;
+
+  let n = parseInt(prompt('Hvor mange spillere? (2-4)', '2'));
+  if(isNaN(n)) n = 2;
+  n = constrain(n, 2, 4);
+
+  for(let i=0; i<n; i++){
+    let name = prompt(`Navn for spiller ${i+1}?`, `Spiller ${i+1}`);
+    if(!name || !name.trim()) name = `Spiller ${i+1}`;
+    Game.players.push(makePlayer(name.trim(), colorFromPalette(i)));
+  }
+  log(`👥 Spillere: ${Game.players.map(p=>p.name).join(', ')}`);
+}
+
 // ---------- UI tegning ----------
 function drawHeader(){
   fill(255); textSize(18); textAlign(LEFT, CENTER);
-  text('Lysets Sti — p5 prototype', margin, 24);
+  text('Lysets Sti — p5 prototype (auto-tur, manuelt rul)', margin, 24);
 
-  // Instruktioner
   fill(180); textSize(12);
-  text('R = rul terning · Enter = afslut tur · N = tilføj spiller (før start) · Klik på kortvalg for at vælge', margin, 48);
+  text('Start/Reset = vælg antal & navne · R = rul terning · N = tilføj spiller (før start) · Klik på kortvalg', margin, 48);
 
-  // Knapper (simple)
   const y = 70;
-  drawButton(margin, y, 110, 30, 'Start / Reset', ()=>resetGame());
-  drawButton(margin+120, y, 110, 30, 'Rul terning (R)', ()=>rollDie());
-  drawButton(margin+240, y, 110, 30, 'Afslut tur (Enter)', ()=>endTurn());
+  drawButton(margin, y, 140, 30, 'Start / Reset', ()=>resetGame());
+  drawButton(margin+150, y, 140, 30, 'Rul terning (R)', ()=>rollDie());
 
-  // Tur-info
   fill(200);
   const p = current();
   textAlign(LEFT, CENTER);
-  text(Game.started ? `Tur: ${p.name}${p.skipTurns>0?' (springer næste tur)':''}` : 'Ikke startet', margin+370, y+15);
+  text(Game.started ? `Tur: ${p.name}${p.skipTurns>0?' (springer næste tur)':''}` : 'Ikke startet', margin+310, y+15);
 
-  // Sidste rul
   textAlign(RIGHT, CENTER);
-  text(Game.lastDie ? `Sidste rul: ${Game.lastDie}` : '', width - margin, y+15);
+  text(Game.lastDie ? `Sidste rul: ${Game.lastDie}` : '', width - SIDEBAR_W - margin, y+15);
 }
 
 function drawBoard(){
-  // 10x4 grid, slange-layout (række 0 fra venstre->højre, række 1 højre->venstre, osv.)
   for(let r=0; r<GRID_ROWS; r++){
     for(let c=0; c<GRID_COLS; c++){
       const idx = gridToIndex(c, r);
       const x = margin + (slitherX(c,r)) * (cellW + cellGap);
       const y = margin + 110 + r * (cellH + cellGap);
-      // felt baggrund
       const t = FIELD_TYPES[idx];
       const col = fieldColor(t);
       fill(col.r, col.g, col.b);
       stroke(40); strokeWeight(1);
       rect(x, y, cellW, cellH, 10);
-      // index + tag
       noStroke(); fill(200); textSize(11); textAlign(LEFT, TOP);
       text(`#${idx}`, x+6, y+4);
-      // tag
-      fill(170);
-      text(tagLabel(t), x+6, y+20);
-
-      // goal outline
+      fill(170); text(tagLabel(t), x+6, y+20);
       if(t==='G'){ noFill(); stroke(245, 158, 11); strokeWeight(2); rect(x, y, cellW, cellH, 10); }
     }
   }
@@ -179,28 +208,25 @@ function drawPlayers(){
 }
 
 function drawSidebar(){
-  // højre log/status
-  const x = width - 320, y = 110;
-  noStroke(); fill(17,24,39,200); rect(x-10, y-10, 300, height - y - 20, 12);
+  const x = width - SIDEBAR_W + 10, y = 110;
+  noStroke(); fill(17,24,39,200);
+  rect(x-10, y-10, SIDEBAR_W - 20, height - y - 20, 12);
+
   fill(199,210,254); textSize(14); textAlign(LEFT, TOP); text('Status & log', x, y);
   fill(160); textSize(12);
   const sumLight = Game.players.reduce((a,b)=>a+b.light,0);
   text(`Samlet Lys: ${sumLight}`, x, y+20);
 
   let yy = y+44;
-  // spillerstatus
   Game.players.forEach(p=>{
     fill(230); text(`${p.name} — Felt ${p.pos} · Lys: ${p.light} · Skygger: ${p.sins.length}${p.shield?' · 🛡️':''}${p.skipTurns>0?' · (springer næste tur)':''}`, x, yy);
     yy += 16;
-    if(p.sins.length>0){
-      fill(255,180,180);
-      text('Synd: '+p.sins.join(', '), x, yy); yy+=16;
-    } else { yy+=4; }
+    if(p.sins.length>0){ fill(255,180,180); text('Synd: '+p.sins.join(', '), x, yy); yy+=16; }
+    else { yy+=4; }
     yy += 6;
   });
 
   yy += 6;
-  // log
   fill(199,210,254); text('Log:', x, yy); yy+=16;
   fill(205); textSize(12);
   let shown = 0;
@@ -212,18 +238,15 @@ function drawSidebar(){
 // ---------- Modal (kort) ----------
 function drawModal(mod){
   push();
-  // dim
   noStroke(); fill(0, 0, 0, 150); rect(0,0,width,height);
-  // kort
   const mw = 640, mh = 300, mx = (width-mw)/2, my = (height-mh)/2;
   fill(12,18,32); stroke(39,49,72); rect(mx, my, mw, mh, 12);
   fill(200); textAlign(LEFT, TOP); textSize(16);
   text(`${mod.kind}: ${mod.title}`, mx+16, my+12);
   fill(180); textSize(13); text(mod.text, mx+16, my+40, mw-32, 200);
 
-  // choices
   const btnH = 36, btnW = mw-32; let by = my + mh - 16 - mod.choices.length*(btnH+8);
-  mod.choices.forEach((choice, idx)=>{
+  mod.choices.forEach(choice=>{
     const bx = mx+16;
     const hover = mouseX>bx && mouseX<bx+btnW && mouseY>by && mouseY<by+btnH;
     fill(hover? color(30,45,70) : color(18,26,42)); stroke(50,65,90);
@@ -238,9 +261,7 @@ function drawModal(mod){
 
 // ---------- Helpers ----------
 function gridToIndex(c,r){
-  // slange-layout: lige rækker venstre->højre, ulige rækker højre->venstre
-  if(r%2===0) return r*GRID_COLS + c;
-  else return r*GRID_COLS + (GRID_COLS-1 - c);
+  if(r%2===0) return r*GRID_COLS + c; else return r*GRID_COLS + (GRID_COLS-1 - c);
 }
 function indexToGrid(idx){
   const r = floor(idx / GRID_COLS);
@@ -261,17 +282,31 @@ function fieldColor(t){
     default:  return {r:16,g:18,b:28};
   }
 }
-function tagLabel(t){
-  return ({N:'Neutral',D:'Dilemma',H:'Handling',S:'Skygge',L:'Lys',E:'Hændelse',G:'Lysets Kirke'})[t] || '';
-}
+function tagLabel(t){ return ({N:'Neutral',D:'Dilemma',H:'Handling',S:'Skygge',L:'Lys',E:'Hændelse',G:'Lysets Kirke'})[t] || ''; }
 
 function log(msg){ Game.log.push(msg); if(Game.log.length>200) Game.log.shift(); }
 function current(){ return Game.players[Game.turn]; }
 
+// --- Auto scheduling helpers (kun tur-skift) ---
+function schedule(fn, ms = TURN_DELAY){ setTimeout(fn, ms); }
+function scheduleNextTurn(){
+  if(!AUTO_TURN) return;
+  if(Game.modal || Game.ended) return;
+  schedule(()=>{ if(!Game.modal && !Game.ended) nextTurn(); });
+}
+
 function nextTurn(){
   Game.turn = (Game.turn+1) % Game.players.length;
   const p = current();
-  if(p.skipTurns>0){ p.skipTurns--; log(`⏭️ ${p.name} springer sin tur over.`); nextTurn(); return; }
+
+  if(p.skipTurns > 0){
+    p.skipTurns--;
+    log(`⏭️ ${p.name} springer sin tur over.`);
+    nextTurn(); // gå straks videre til næste
+    return;
+  }
+
+  log(`➡️ Det er nu ${p.name}s tur. Tryk R for at rulle.`);
 }
 
 function move(G,p,steps){
@@ -302,6 +337,7 @@ function checkWin(p){
   const ok = (p.light>=3 && p.sins.length<=2);
   if(ok){
     log(`🏁 ${p.name} træder ind i Lysets Kirke og vinder!`);
+    Game.ended = true;
     noLoop();
   } else {
     log(`⛔ ${p.name} nåede kirken men opfylder ikke kravene (Lys: ${p.light}, Skygger: ${p.sins.length}).`);
@@ -312,87 +348,90 @@ function checkWin(p){
 function d(title, text, ...choices){ return {kind:'Dilemma', title, text, choices}; }
 function c(label, effect){ return {label, effect}; }
 
-// ---------- Modal åbning ----------
+// ---------- Modal åbning (auto-tur når lukket) ----------
 function openDilemma(card){
   Game.modal = {
     kind:'Dilemma',
     title:card.title, text:card.text,
-    choices: card.choices.map(ch=>({label:ch.label, effect:()=>{ ch.effect(Game,current()); Game.modal=null; }}))
+    choices: card.choices.map(ch=>({
+      label:ch.label,
+      effect:()=>{ ch.effect(Game,current()); Game.modal=null; scheduleNextTurn(); }
+    }))
   };
 }
 function openAction(card){
   Game.modal = {
     kind:'Handling',
     title:card.title, text:card.text,
-    choices: [{label:'Brug', effect:()=>{ card.use(Game,current()); Game.modal=null; }}]
+    choices: [{
+      label:'Brug',
+      effect:()=>{ card.use(Game,current()); Game.modal=null; scheduleNextTurn(); }
+    }]
   };
 }
 function openEvent(card){
   Game.modal = {
     kind:'Hændelse',
     title:card.title, text:card.text,
-    choices: [{label:'Udfør', effect:()=>{ card.run(Game); Game.modal=null; }}]
+    choices: [{
+      label:'Udfør',
+      effect:()=>{ card.run(Game); Game.modal=null; scheduleNextTurn(); }
+    }]
   };
 }
 
 // ---------- Input ----------
 function mousePressed(){
   if(!Game.modal) return;
-  // klik på modal-knapper
   for(const ch of Game.modal.choices){
     const b = ch._bbox;
     if(!b) continue;
     if(mouseX>b.x && mouseX<b.x+b.w && mouseY>b.y && mouseY<b.y+b.h){
-      ch.effect();
-      return;
+      ch.effect(); return;
     }
   }
 }
 
 function keyPressed(){
   if(key==='r' || key==='R') rollDie();
-  if(keyCode===ENTER) endTurn();
   if(key==='n' || key==='N') addPlayer();
 }
 
 function rollDie(){
-  if(Game.modal) return;
+  if(Game.modal || Game.ended) return;
   Game.started = true;
   const p = current();
-  if(p.skipTurns>0){ log(`⏭️ ${p.name} springer sin tur.`); p.skipTurns--; nextTurn(); return; }
+
+  if(p.skipTurns>0){
+    log(`⏭️ ${p.name} springer sin tur.`);
+    p.skipTurns--;
+    nextTurn();
+    return;
+  }
+
   const die = 1 + Math.floor(Math.random()*6);
   Game.lastDie = die;
   log(`🎲 ${p.name} slår ${die}.`);
   move(Game,p,die);
   applyField(p);
-}
 
-function endTurn(){
-  if(Game.modal) return; // afvent kortvalg
-  nextTurn();
+  if(!Game.modal && !Game.ended){
+    setTimeout(()=>scheduleNextTurn(), 50);
+  }
 }
 
 function addPlayer(){
   if(Game.started){ log('Kan ikke tilføje spillere efter start.'); return; }
   if(Game.players.length>=4){ log('Max 4 spillere.'); return; }
-  const name = prompt('Spillernavn?');
-  if(!name) return;
-  const colors = [color(96,165,250), color(244,114,182), color(52,211,153), color(245,158,11)];
-  Game.players.push(makePlayer(name, colors[Game.players.length]));
-  log(`➕ Tilføjet spiller: ${name}`);
+  const name = prompt('Navn på ny spiller?');
+  if(!name || !name.trim()){ log('Ingen spiller tilføjet.'); return; }
+  const idx = Game.players.length;
+  Game.players.push(makePlayer(name.trim(), colorFromPalette(idx)));
+  log(`➕ Tilføjet spiller: ${name.trim()}`);
 }
 
 function resetGame(){
-  // reset alt
-  Game.started=false; Game.turn=0; Game.lastDie=null; Game.log=[];
-  const names = Game.players.map(p=>p.name);
-  Game.players = names.slice(0, Math.max(2, Math.min(4, names.length))).map((n,i)=>{
-    const colors = [color(96,165,250), color(244,114,182), color(52,211,153), color(245,158,11)];
-    return makePlayer(n || `Spiller ${i+1}`, colors[i]);
-  });
-  if(Game.players.length<2){
-    Game.players = [makePlayer('Spiller 1', color(96,165,250)), makePlayer('Spiller 2', color(244,114,182))];
-  }
+  initPlayers(); // spørg igen om antal + navne
   loop();
 }
 
@@ -402,11 +441,7 @@ function drawButton(x,y,w,h,label, onClick){
   fill(hover ? color(39,55,82) : color(31,41,55)); stroke(43,54,74);
   rect(x,y,w,h,8);
   noStroke(); fill(230); textAlign(CENTER, CENTER); textSize(12); text(label, x+w/2, y+h/2);
-  // klik
-  if(mouseIsPressed && hover && !Game._btnLatch){
-    onClick();
-    Game._btnLatch = true;
-  }
+  if(mouseIsPressed && hover && !Game._btnLatch){ onClick(); Game._btnLatch = true; }
   if(!mouseIsPressed) Game._btnLatch = false;
 }
 
