@@ -58,7 +58,7 @@ const DILEMMAS = [
     c('Accepter (+1 Lys)', (G,p)=>{p.light+=1; log(`🕊️ ${p.name} accepterer (+1 Lys).`);}),
     c('Benægt (+1 Skygge, ryk +2)', (G,p)=>{giveSin(G,p); move(G,p,2); log(`🌫️ ${p.name} benægter (+1 Skygge, +2).`);})
   ),
-  d('Hjælp med lektier','Hjælper du – eller ikke?',
+  d('Din ven beder om hjælp med lektier','Hjælper du – eller ikke?',
     c('Hjælp (mist 1 tur, +2 Lys)', (G,p)=>{p.skipTurns++; p.light+=2; log(`📚 ${p.name} hjælper (+2 Lys, mister næste tur).`);}),
     c('Sig nej (ryk +2, +1 Skygge)', (G,p)=>{move(G,p,2); giveSin(G,p); log(`🙅 ${p.name} siger nej (+2, +1 Skygge).`);})
   ),
@@ -156,7 +156,7 @@ function initPlayers(){
 // ---------- UI tegning ----------
 function drawHeader(){
   fill(255); textSize(18); textAlign(LEFT, CENTER);
-  text('Lysets Sti — p5 prototype (auto-tur, manuelt rul)', margin, 24);
+  text('HORIZON OF ENLIGHTENMENT', margin, 24);
 
   fill(180); textSize(12);
   text('Start/Reset = vælg antal & navne · R = rul terning · N = tilføj spiller (før start) · Klik på kortvalg', margin, 48);
