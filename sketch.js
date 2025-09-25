@@ -1,5 +1,5 @@
 // Lysets Sti – p5.js version med sidebar + automatisk turskift (manuelt rul)
-// Nu med navnevalg for ALLE spillere ved Start/Reset samt ved tilføjelse af nye.
+// Nu med navne-label over hver brik + navnevalg for alle spillere ved Start/Reset.
 
 let W = 1227, H = 637;
 
@@ -193,18 +193,42 @@ function drawBoard(){
   }
 }
 
+// ---------- BRIKKE + NAVNESKILT ----------
 function drawPlayers(){
+  const pad = 8, size = 16;   // brikstørrelse
+  textSize(11);
   for(let i=0;i<Game.players.length;i++){
     const p = Game.players[i];
     const pos = p.pos;
     const cr = indexToGrid(pos);
     const x = margin + slitherX(cr.c,cr.r) * (cellW + cellGap);
     const y = margin + 110 + cr.r * (cellH + cellGap);
-    const pad = 8, size = 16;
-    const px = x + pad + (i%3)* (size+6);
-    const py = y + cellH - pad - size - floor(i/3)*(size+6);
+
+    // Plads i feltet (så flere spillere i samme felt ikke ligger oveni hinanden)
+    const px = x + pad + (i%3) * (size+6);
+    const py = y + cellH - pad - size - floor(i/3) * (size+6);
+
+    // Brik
     noStroke(); fill(p.color); circle(px, py, size);
+
+    // Navneskilt lige over brikken
+    drawNameTag(px, py - size/2, p.name);
   }
+}
+
+// Navne-label helper
+function drawNameTag(cx, topY, label){
+  push();
+  textSize(11);
+  textAlign(CENTER, BOTTOM);
+  const pad = 4, th = 14;
+  const tw = textWidth(label) + pad*2;
+  noStroke();
+  fill(0, 0, 0, 160);               // semitransparent sort baggrund
+  rect(cx - tw/2, topY - th - 2, tw, th, 6);
+  fill(255);
+  text(label, cx, topY - 4);
+  pop();
 }
 
 function drawSidebar(){
@@ -437,7 +461,7 @@ function resetGame(){
 
 // ---------- Button helper ----------
 function drawButton(x,y,w,h,label, onClick){
-  const hover = mouseX>x && mouseX<x+w && mouseY>y && mouseY<y+h;
+  const hover = mouseX>x && mouseX<x+w && mouseY>y && mouseY<h+y;
   fill(hover ? color(39,55,82) : color(31,41,55)); stroke(43,54,74);
   rect(x,y,w,h,8);
   noStroke(); fill(230); textAlign(CENTER, CENTER); textSize(12); text(label, x+w/2, y+h/2);
