@@ -146,7 +146,7 @@ function initPlayers(){
   n = constrain(n, 2, 9);
 
   for(let i=0; i<n; i++){
-    let name = prompt(`Navn for spiller ${i+1}?`, `Spiller ${i+1}`);
+    let name = prompt(`Navn for spiller? ${i+1}?`, `Spiller ${i+1}`);
     if(!name || !name.trim()) name = `Spiller ${i+1}`;
     Game.players.push(makePlayer(name.trim(), colorFromPalette(i)));
   }
