@@ -141,9 +141,9 @@ function initPlayers(){
   Game.players = [];
   Game.started = false; Game.turn = 0; Game.lastDie = null; Game.log = []; Game.modal = null; Game.ended = false;
 
-  let n = parseInt(prompt('Hvor mange spillere? (2-10)', '2'));
+  let n = parseInt(prompt('Hvor mange spillere? (2-9)', '2'));
   if(isNaN(n)) n = 2;
-  n = constrain(n, 2, 4);
+  n = constrain(n, 2, 9);
 
   for(let i=0; i<n; i++){
     let name = prompt(`Navn for spiller ${i+1}?`, `Spiller ${i+1}`);
@@ -156,7 +156,7 @@ function initPlayers(){
 // ---------- UI tegning ----------
 function drawHeader(){
   fill(255); textSize(18); textAlign(LEFT, CENTER);
-  text('HORIZON OF ENLIGHTENMENT', margin, 24);
+  text('HORIZON OF WISDOM', margin, 24);
 
   fill(180); textSize(12);
   text('Start/Reset = vælg antal & navne · R = rul terning · N = tilføj spiller (før start) · Klik på kortvalg', margin, 48);
