@@ -141,7 +141,7 @@ function initPlayers(){
   Game.players = [];
   Game.started = false; Game.turn = 0; Game.lastDie = null; Game.log = []; Game.modal = null; Game.ended = false;
 
-  let n = parseInt(prompt('Hvor mange spillere? (2-4)', '2'));
+  let n = parseInt(prompt('Hvor mange spillere? (2-10)', '2'));
   if(isNaN(n)) n = 2;
   n = constrain(n, 2, 4);
 
@@ -446,7 +446,7 @@ function rollDie(){
 
 function addPlayer(){
   if(Game.started){ log('Kan ikke tilføje spillere efter start.'); return; }
-  if(Game.players.length>=4){ log('Max 4 spillere.'); return; }
+  if(Game.players.length>=10){ log('Max 10 spillere.'); return; }
   const name = prompt('Navn på ny spiller?');
   if(!name || !name.trim()){ log('Ingen spiller tilføjet.'); return; }
   const idx = Game.players.length;
